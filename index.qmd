@@ -1,0 +1,244 @@
+---
+title: "Analytical report"
+format: 
+  html:
+    toc: true
+    theme: default
+---
+
+### Introduction
+
+This webpage contains the description and codes for reproducing the analysis conducted in the article "Comparative susceptibility of *Ficus carica* and *Morus nigra* to *Cerotelium fici* isolates in cross-inoculation studies".
+
+### Methodology
+
+Each "treatment" in our analysis was defined as a unique combination of host-pathogen, specifically CFF × F. carica, CFM × F. carica, CFF × M. nigra, and CFM × M. nigra. These treatments were evaluated in four independent experiments, with no randomization of treatments within a single experiment. Each experiment was repeated twice for each host-pathogen combination, resulting in a total of eight trials (two repetitions per treatment at different times).
+
+Given the lack of randomization within experiments and the independent nature of the trials, a meta-analytic approach was employed to analyze the data. This approach allowed us to estimate the effects of treatments (treatment means) for each variable of interest while accounting for both within-experiment variability (variance among replicates within the same experiment) and between-experiment variability (differences across independent experiments). By using this method, we were able to pool data across experiments to provide robust and generalizable estimates of treatment effects, while properly addressing the hierarchical structure of the data. The meta-analysis was conducted using a multilevel random-effects model implemented in the metafor package in R.
+
+The model incorporated a fixed effect for treatments and a random effect for experiments to account for variability between experiments. The model's fit was evaluated using restricted maximum likelihood (REML) estimation. Pairwise comparisons between treatments were conducted using the emmeans package to calculate marginal means and perform post hoc tests, adjusted for multiple comparisons using the Tukey method. Estimated marginal means for each treatment were calculated to assess differences in the mean values. Pairwise comparisons were performed to identify statistically significant differences between treatments.
+
+### Load the data
+
+```{r}
+#| warning: false
+#| message: false
+library(readxl)
+library(dplyr)
+```
+
+### MA for severity
+
+```{r}
+#| warning: false
+#| message: false
+
+# Load data
+datasev <- read_excel ("data_experiments.xlsx")
+
+# Summarize data
+summary_data <- datasev %>%
+  group_by(interacao, exp) %>%                      
+  summarize(
+    mean_sev = mean(sev, na.rm = TRUE),  
+    var_sev = var(sev, na.rm = TRUE),    
+    n = n()                                         
+  )
+summary_data
+
+summary_data <- summary_data %>%
+  mutate(
+    SE_sev = sqrt(var_sev / n),  # SE = sqrt(variance / sample size)
+    vi = SE_sev^2                      # Variance = SE^2
+  )
+summary_data <- summary_data |> 
+  filter(interacao != "CFFM. nigra")
+
+library(metafor)
+
+# Meta-regression using the summarized data
+res <- rma.mv(
+  yi = mean_sev,  
+  V = vi,              
+  mods = ~ interacao, 
+  random = ~ interacao | exp, 
+  data = summary_data,
+  method = "REML"
+)
+# Summary of results
+summary(res)
+
+library(emmeans)
+prep_emmeans <- emmprep(res,  mods = ~ interacao)
+
+# Marginal means for treatments
+emmeans_res <- emmeans(prep_emmeans, ~ interacao)
+
+# Pairwise comparisons
+pairs(emmeans_res)
+
+# Marginal means for interaction by experiment
+emmeans_res_exp <- emmeans(prep_emmeans, ~ interacao)
+
+emmeans_res_exp
+library(multcomp)
+cld(emmeans_res_exp)
+
+```
+
+### MA for number of lesions
+
+```{r}
+#| warning: false
+#| message: false
+
+# Load data
+datalesao <- read_excel("data_experiments.xlsx", "lesao")
+
+# Summarize data
+summary_data <- datalesao %>%
+  group_by(interacao, exp) %>%                    
+  summarize(
+    mean_lesoes = mean(lesoes, na.rm = TRUE),  
+    var_lesoes = var(lesoes, na.rm = TRUE),   
+    n = n()                                          
+  )
+summary_data
+
+summary_data <- summary_data %>%
+  mutate(
+    SE_lesoes = sqrt(var_lesoes / n),  
+    vi = SE_lesoes^2                      
+  )
+summary_data <- summary_data |> 
+  filter(interacao != "CFFM. nigra")
+
+library(metafor)
+
+# Meta-regression using the summarized data
+res <- rma.mv(
+  yi = mean_lesoes,  
+  V = vi,              
+  mods = ~ interacao, 
+  random = ~ interacao | exp, 
+  data = summary_data,
+  method = "REML"
+)
+# Summary of results
+summary(res)
+
+library(emmeans)
+prep_emmeans <- emmprep(res,  mods = ~ interacao)
+
+# Marginal means for treatments
+emmeans_res <- emmeans(prep_emmeans, ~ interacao)
+
+# Pairwise comparisons
+pairs(emmeans_res)
+
+# Marginal means for interaction by experiment
+emmeans_res_exp <- emmeans(prep_emmeans, ~ interacao)
+
+emmeans_res_exp
+library(multcomp)
+cld(emmeans_res_exp)
+
+residuals <- residuals(res)
+
+# Calculate the number of degrees of freedom
+n_obs <- length(residuals)
+n_params <- length(coef(res)) + length(res$sigma2)
+
+# Calculate the mean square error (MSE)
+MSE <- sum(residuals^2) / (n_obs - n_params)
+
+# Residual standard deviation
+residual_sd <- sqrt(MSE)
+
+# Calculate the mean of the predicted values
+mean_y <- mean(predict(res)$pred)
+
+# Calculate the CV in the original scale
+cv <- (residual_sd / mean_y) * 100
+
+cv
+```
+
+### MA for sporulation
+
+```{r}
+#| warning: false
+#| message: false
+
+# Load data
+
+dataesp <- read_excel ("data_experiments.xlsx", "esporulação")
+
+# Summarize data
+summary_data <- dataesp %>%
+  group_by(interacao, exp) %>%                    
+  summarize(
+    mean_esporos = mean(esporos, na.rm = TRUE),  
+    var_esporos = var(esporos, na.rm = TRUE),    
+    n = n()                                        
+  )
+summary_data
+
+summary_data <- summary_data %>%
+  mutate(
+    SE_esporos = sqrt(var_esporos/n),  
+    vi = SE_esporos^2                      
+  )
+
+library(metafor)
+
+# Meta-regression using the summarized data
+res <- rma.mv(
+  yi = mean_esporos,  
+  V = vi,               
+  mods = ~ interacao, 
+  random = ~ interacao | exp,  
+  data = summary_data,
+  method = "REML"
+)
+# Summary of results
+summary(res)
+res$tau2
+library(emmeans)
+prep_emmeans <- emmprep(res,  mods = ~ interacao)
+
+# Marginal means for treatments
+emmeans_res <- emmeans(prep_emmeans, ~ interacao)
+
+# Pairwise comparisons
+pairs(emmeans_res)
+
+# Marginal means for interaction by experiment
+emmeans_res_exp <- emmeans(prep_emmeans, ~ interacao)
+
+emmeans_res_exp
+library(multcomp)
+cld(emmeans_res_exp)
+
+residuals <- residuals(res)
+
+# Calculate the number of degrees of freedom
+n_obs <- length(residuals)
+n_params <- length(coef(res)) + length(res$sigma2)
+
+# Calculate the mean square error (MSE)
+MSE <- sum(residuals^2) / (n_obs - n_params)
+
+# Residual standard deviation
+residual_sd <- sqrt(MSE)
+
+# Calculate the mean of the predicted values
+mean_y <- mean(predict(res)$pred)
+
+# Calculate the CV in the original scale
+cv <- (residual_sd / mean_y) * 100
+
+cv
+
+
+```
